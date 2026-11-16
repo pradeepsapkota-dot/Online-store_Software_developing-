@@ -92,16 +92,36 @@ This screenshot shows payment information, including payment method, amount and 
 
 
 ## 6. Testing
+New tests were made this week regarding searching, deleting, adding products:
 
-The application functions were tested during development. Automated tests were also added using pytest.
+### 6.1 Searching Products
+when searching for a product, it suggests two options: search by name or search by ID
+Example used here was Wireless mouse and the product info is displayed then successfully
+Same with searching using product ID, the ID number is added (Wireless mouse ID: 1) the product info is also displayed.
 
-A total of **17 automated tests passed**, covering product operations, order creation, stock checking, order status updates, and payment handling. The tests use mocked database connections to avoid changing real database records.
+### 6.2 Deleting Products
+The product deletion functionality was tested by selecting an existing product from the product list. The selected product was the Mechanical Keyboard (Product ID: 2).
+After confirming the deletion, the application displayed an error message indicating that the product could not be deleted because it was linked to an existing order.
+This error was caused by a foreign key constraint between the product and orderitem tables. The database prevents the deletion of products that are referenced by existing order records to maintain referential integrity.
 
-### Figure 5 – Automated Testing Results
+### 6.3 Adding Products
+The product addition functionality was tested by entering the required product information, including the product name, category, price, and stock quantity.
+The application successfully added the new product to the database. However, no confirmation message was displayed after submitting the form. To verify that the operation was successful, it was necessary to navigate to the Products List and check whether the newly added product appeared.
+Another issue was identified when attempting to add a product that already existed in the database. Instead of updating the stock quantity of the existing product, the application created a new product entry with a different Product ID.
+This resulted in multiple entries for the same product in the product list, as observed during testing with the Mouse Pad product.
 
-The project was tested using pytest. All 17 automated tests passed successfully.
+### 6.4 Creating orders
+The order creation functionality was tested by selecting an existing customer and adding a product to the order.
 
-![Pytest Results](../ApplicationScreenshots/pytest-results.png)
+For this test, Michael Brown (Customer ID: 3) was selected, and a Laptop Stand (Product ID: 4) was added with a quantity of 1.
+
+The application correctly displayed the product price (€39.99), available stock (200 units), and calculated the order total (€39.99).
+
+However, after clicking the "Create Order" button, the application displayed an error message indicating that order creation had failed.
+
+Although the customer and product selection, quantity input, and total price calculation worked correctly, the order could not be successfully submitted.
+
+Further investigation is required to identify the cause of the failure.
 
 ## 7. Conclusion
 
