@@ -11,12 +11,13 @@ def get_connection():
     """Create and return a connection to the MySQL database."""
     try:
         connection = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password=os.getenv("MYSQL_PASSWORD"),
-            database="ecommerce_storedb"
+            host=os.getenv("MySQL_HOST"),
+            user=os.getenv("MySQL_USER"),
+            password=os.getenv("MySQL_PASSWORD"),
+            database=os.getenv("MySQL_DATABASE")
         )
-        return connection
+        if connection.is_connected():
+            return connection
 
     except Error as e:
         print(f"Error connecting to MySQL: {e}")
