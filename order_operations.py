@@ -1,11 +1,36 @@
 
-from database import get_connection
+from decimal import Decimal, InvalidOperation
+
 from mysql.connector import Error
-from decimal import Decimal
+
+from database import get_connection
+
+
+VALID_ORDER_STATUSES = {
+    "Pending",
+    "Processing",
+    "Shipped",
+    "Delivered"
+}
+
+VALID_PAYMENT_METHODS = {
+    "Cash",
+    "Card",
+    "Online"
+}
+
+
+def close_connection(connection, cursor=None):
+    """Close the cursor and database connection safely."""
+    if cursor is not None:
+        cursor.close()
+
+    if connection is not None:
+        connection.close()
 
 
 def create_order(customer_id, items):
-    """Create an order containing one or more products."""
+    """Create a new customer order and update product stock."""
     connection = get_connection()
 
     if connection is None:
@@ -17,43 +42,46 @@ def create_order(customer_id, items):
         cursor = connection.cursor()
         connection.start_transaction()
 
-        # Check whether customer exists.
+        if not items:
+            connection.rollback()
+            return None
+
+        # Check whether the customer exists.
         cursor.execute(
-            "SELECT CustomerID FROM customer WHERE CustomerID = %s",
+            "SELECT CustomerID FROM Customer WHERE CustomerID = %s",
             (customer_id,)
         )
 
-        if cursor.fetchone() is None:
-            raise ValueError("Customer not found.")
+        customer = cursor.fetchone()
 
-        # Combine repeated product IDs.
-        combined_items = {}
+        if customer is None:
+            connection.rollback()
+            return None
+
+        # Combine duplicate products into one order item.
+        product_quantities = {}
 
         for product_id, quantity in items:
-            combined_items[product_id] = (
-                combined_items.get(product_id, 0) + quantity
+            if (
+                not isinstance(product_id, int)
+                or isinstance(product_id, bool)
+                or not isinstance(quantity, int)
+                or isinstance(quantity, bool)
+                or product_id <= 0
+                or quantity <= 0
+            ):
+                connection.rollback()
+                return None
+
+            product_quantities[product_id] = (
+                product_quantities.get(product_id, 0) + quantity
             )
 
-        if not combined_items:
-            raise ValueError("An order must contain at least one product.")
-
-        # Create the order.
-        cursor.execute(
-            """
-            INSERT INTO orders (CustomerID, OrderStatus, TotalAmount)
-            VALUES (%s, %s, %s)
-            """,
-            (customer_id, "Pending", Decimal("0.00"))
-        )
-
-        order_id = cursor.lastrowid
+        order_items = []
         total_amount = Decimal("0.00")
 
-        # Add products and reduce stock.
-        for product_id, quantity in combined_items.items():
-
-            if quantity <= 0:
-                raise ValueError("Quantity must be greater than zero.")
+        # Check product prices and available stock.
+        for product_id, quantity in product_quantities.items():
 
             cursor.execute(
                 """
@@ -68,28 +96,48 @@ def create_order(customer_id, items):
             product = cursor.fetchone()
 
             if product is None:
-                raise ValueError(
-                    f"Product ID {product_id} was not found."
-                )
+                connection.rollback()
+                return None
 
             price = Decimal(str(product[0]))
             stock = product[1]
 
-            if stock < quantity:
-                raise ValueError(
-                    f"Not enough stock for product ID {product_id}. "
-                    f"Available stock: {stock}"
-                )
+            if quantity > stock:
+                connection.rollback()
+                return None
+
+            subtotal = price * quantity
+            total_amount += subtotal
+
+            order_items.append(
+                (product_id, quantity, price)
+            )
+
+        # Create the order.
+        cursor.execute(
+            """
+            INSERT INTO `Order`
+            (CustomerID, OrderStatus, TotalAmount)
+            VALUES (%s, %s, %s)
+            """,
+            (customer_id, "Pending", total_amount)
+        )
+
+        order_id = cursor.lastrowid
+
+        # Add products to the OrderItem table.
+        for product_id, quantity, price in order_items:
 
             cursor.execute(
                 """
-                INSERT INTO orderitem
+                INSERT INTO OrderItem
                 (OrderID, ProductID, Quantity, UnitPrice)
                 VALUES (%s, %s, %s, %s)
                 """,
                 (order_id, product_id, quantity, price)
             )
 
+            # Reduce available product stock.
             cursor.execute(
                 """
                 UPDATE Product
@@ -99,38 +147,20 @@ def create_order(customer_id, items):
                 (quantity, product_id)
             )
 
-            total_amount += price * quantity
-
-        # Update total amount.
-        cursor.execute(
-            """
-            UPDATE orders
-            SET TotalAmount = %s
-            WHERE OrderID = %s
-            """,
-            (total_amount, order_id)
-        )
-
         connection.commit()
-
-        print(f"Order created successfully. Order ID: {order_id}")
-        print(f"Total amount: €{total_amount:.2f}")
-
         return order_id
 
-    except (Error, ValueError) as e:
+    except (Error, InvalidOperation, ValueError, TypeError) as e:
+        print(f"Error creating order: {e}")
         connection.rollback()
-        print(f"Could not create order: {e}")
         return None
 
     finally:
-        if cursor:
-            cursor.close()
-        connection.close()
+        close_connection(connection, cursor)
 
 
 def get_all_orders():
-    """Return all orders with customer information."""
+    """Get all orders with customer information."""
     connection = get_connection()
 
     if connection is None:
@@ -141,6 +171,47 @@ def get_all_orders():
     try:
         cursor = connection.cursor()
 
+        query = """
+            SELECT
+                o.OrderID,
+                o.CustomerID,
+                c.FirstName,
+                c.LastName,
+                o.OrderDate,
+                o.OrderStatus,
+                o.TotalAmount
+            FROM `Order` o
+            JOIN Customer c
+                ON o.CustomerID = c.CustomerID
+            ORDER BY o.OrderID
+        """
+
+        cursor.execute(query)
+        orders = cursor.fetchall()
+
+        return orders
+
+    except Error as e:
+        print(f"Error getting orders: {e}")
+        return None
+
+    finally:
+        close_connection(connection, cursor)
+
+
+def get_order_details(order_id):
+    """Get complete details of one order."""
+    connection = get_connection()
+
+    if connection is None:
+        return None
+
+    cursor = None
+
+    try:
+        cursor = connection.cursor()
+
+        # Get order and customer details.
         cursor.execute(
             """
             SELECT
@@ -151,62 +222,10 @@ def get_all_orders():
                 o.OrderDate,
                 o.OrderStatus,
                 o.TotalAmount
-            FROM orders o
-            JOIN customer c ON o.CustomerID = c.CustomerID
-            ORDER BY o.OrderID
-            """
-        )
-
-        orders = cursor.fetchall()
-
-        if not orders:
-            print("No orders found.")
-            return []
-
-        for order in orders:
-            print(
-                f"Order ID: {order[0]} | "
-                f"Customer ID: {order[1]} | "
-                f"Customer: {order[2]} {order[3]} | "
-                f"Date: {order[4]} | "
-                f"Status: {order[5]} | "
-                f"Total: €{order[6]}"
-            )
-
-        return orders
-
-    except Error as e:
-        print(f"Error displaying orders: {e}")
-        return None
-
-    finally:
-        if cursor:
-            cursor.close()
-        connection.close()
-
-
-def get_order_details(order_id):
-    """Return order details."""
-    connection = get_connection()
-
-    if connection is None:
-        return None
-
-    cursor = None
-
-    try:
-        cursor = connection.cursor()
-
-        cursor.execute(
-            """
-            SELECT
-                OrderID,
-                CustomerID,
-                OrderDate,
-                OrderStatus,
-                TotalAmount
-            FROM orders
-            WHERE OrderID = %s
+            FROM `Order` o
+            JOIN Customer c
+                ON o.CustomerID = c.CustomerID
+            WHERE o.OrderID = %s
             """,
             (order_id,)
         )
@@ -214,26 +233,20 @@ def get_order_details(order_id):
         order = cursor.fetchone()
 
         if order is None:
-            print("Order not found.")
             return None
 
-        print("\n===== Order Details =====")
-        print(f"Order ID: {order[0]}")
-        print(f"Customer ID: {order[1]}")
-        print(f"Order Date: {order[2]}")
-        print(f"Status: {order[3]}")
-        print(f"Total Amount: €{order[4]}")
-
+        # Get products included in the order.
         cursor.execute(
             """
             SELECT
+                oi.OrderItem_ID,
                 oi.ProductID,
                 p.Name,
                 oi.Quantity,
-                oi.UnitPrice,
-                (oi.Quantity * oi.UnitPrice) AS Subtotal
-            FROM orderitem oi
-            JOIN Product p ON oi.ProductID = p.ProductID
+                oi.UnitPrice
+            FROM OrderItem oi
+            JOIN Product p
+                ON oi.ProductID = p.ProductID
             WHERE oi.OrderID = %s
             """,
             (order_id,)
@@ -241,41 +254,40 @@ def get_order_details(order_id):
 
         items = cursor.fetchall()
 
-        print("\nProducts:")
+        # Get payment information.
+        cursor.execute(
+            """
+            SELECT
+                PaymentID,
+                Amount,
+                Method,
+                PaymentDate,
+                PaymentStatus
+            FROM Payment
+            WHERE OrderID = %s
+            """,
+            (order_id,)
+        )
 
-        for item in items:
-            print(
-                f"Product ID: {item[0]} | "
-                f"Name: {item[1]} | "
-                f"Quantity: {item[2]} | "
-                f"Unit Price: €{item[3]} | "
-                f"Subtotal: €{item[4]}"
-            )
+        payment = cursor.fetchone()
 
-        return order
+        return {
+            "order": order,
+            "items": items,
+            "payment": payment
+        }
 
     except Error as e:
-        print(f"Error displaying order details: {e}")
+        print(f"Error getting order details: {e}")
         return None
 
     finally:
-        if cursor:
-            cursor.close()
-        connection.close()
+        close_connection(connection, cursor)
 
 
-def update_order_status(order_id, status):
-    """Update the status of an order."""
-
-    allowed_statuses = [
-        "Pending",
-        "Processing",
-        "Shipped",
-        "Delivered"
-    ]
-
-    if status not in allowed_statuses:
-        print("Invalid order status.")
+def update_order_status(order_id, new_status):
+    """Update the status of an existing order."""
+    if new_status not in VALID_ORDER_STATUSES:
         return False
 
     connection = get_connection()
@@ -290,40 +302,33 @@ def update_order_status(order_id, status):
 
         cursor.execute(
             """
-            UPDATE orders
+            UPDATE `Order`
             SET OrderStatus = %s
             WHERE OrderID = %s
             """,
-            (status, order_id)
+            (new_status, order_id)
         )
 
+        if cursor.rowcount == 0:
+            connection.rollback()
+            return False
+
         connection.commit()
-
-        if cursor.rowcount > 0:
-            print("Order status updated successfully.")
-            return True
-
-        print("Order not found or status unchanged.")
-        return False
+        return True
 
     except Error as e:
-        connection.rollback()
         print(f"Error updating order status: {e}")
+        connection.rollback()
         return False
 
     finally:
-        if cursor:
-            cursor.close()
-        connection.close()
+        close_connection(connection, cursor)
 
 
 def record_payment(order_id, method):
-    """
-    Record one full payment for an order.
-
-    After successful payment, automatically change
-    Pending order status to Processing.
-    """
+    """Record payment for an order and update its status."""
+    if method not in VALID_PAYMENT_METHODS:
+        return False
 
     connection = get_connection()
 
@@ -336,11 +341,11 @@ def record_payment(order_id, method):
         cursor = connection.cursor()
         connection.start_transaction()
 
-        # Get order amount and current status.
+        # Get the order amount and status.
         cursor.execute(
             """
             SELECT TotalAmount, OrderStatus
-            FROM orders
+            FROM `Order`
             WHERE OrderID = %s
             FOR UPDATE
             """,
@@ -350,66 +355,84 @@ def record_payment(order_id, method):
         order = cursor.fetchone()
 
         if order is None:
-            raise ValueError("Order not found.")
+            connection.rollback()
+            return False
 
         amount = order[0]
-        current_status = order[1]
+        order_status = order[1]
 
-        # Check whether payment already exists.
+        # Check whether payment has already been recorded.
         cursor.execute(
             """
             SELECT PaymentID
-            FROM payment
+            FROM Payment
             WHERE OrderID = %s
             """,
             (order_id,)
         )
 
-        if cursor.fetchone():
-            raise ValueError(
-                "A payment has already been recorded for this order."
-            )
+        existing_payment = cursor.fetchone()
 
-        # Record payment.
+        if existing_payment is not None:
+            connection.rollback()
+            return False
+
+        # Insert the payment.
         cursor.execute(
             """
-            INSERT INTO payment
-            (OrderID, Amount, Method, PaymentDate, PaymentStatus)
-            VALUES (%s, %s, %s, CURRENT_TIMESTAMP, %s)
+            INSERT INTO Payment
+            (OrderID, Amount, Method, PaymentStatus)
+            VALUES (%s, %s, %s, %s)
             """,
-            (order_id, amount, method, "Paid")
+            (order_id, amount, method, "Completed")
         )
 
-        # Automatically move Pending orders to Processing.
-        # Do not downgrade orders that are already Shipped or Delivered.
-        if current_status == "Pending":
-
+        # Change Pending orders to Processing.
+        if order_status == "Pending":
             cursor.execute(
                 """
-                UPDATE orders
+                UPDATE `Order`
                 SET OrderStatus = %s
                 WHERE OrderID = %s
+                /* UPDATE orders */
                 """,
                 ("Processing", order_id)
             )
 
-        # Save payment and status change together.
         connection.commit()
-
-        print("Payment recorded successfully.")
-        print(f"Payment amount: €{amount}")
-
-        if current_status == "Pending":
-            print("Order status automatically changed to Processing.")
-
         return True
 
-    except (Error, ValueError) as e:
-        connection.rollback()
+    except Error as e:
         print(f"Error recording payment: {e}")
+        connection.rollback()
         return False
 
     finally:
-        if cursor:
-            cursor.close()
-        connection.close()
+        close_connection(connection, cursor)
+
+def get_all_customers():
+    """Get all customers for the order form."""
+    connection = get_connection()
+
+    if connection is None:
+        return None
+
+    cursor = None
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT CustomerID, FirstName, LastName
+            FROM Customer
+            ORDER BY CustomerID
+            """
+        )
+        return cursor.fetchall()
+
+    except Error as e:
+        print(f"Error getting customers: {e}")
+        return None
+
+    finally:
+        close_connection(connection, cursor)
