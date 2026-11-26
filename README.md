@@ -42,11 +42,14 @@ python_mysql/
 │   ├── Week 1 Detailed Progress Report.md
 │   ├── Week 2 Detailed Progress Report.md
 │   └── Week 3 Detailed Progress Report.md
+│   └── Week 4 Detailed Progress Report.md
+│   └── Week 5 Detailed Progress Report.md
 │
-├── Tests/
+├── tests/
 │   ├── test_order_operations.py
 │   ├── test_product_operations.py
 │   └── test_stock_operations.py
+│   └── test_validation.py
 │
 ├── app.py
 ├── database.py
