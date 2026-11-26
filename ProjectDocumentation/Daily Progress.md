@@ -364,20 +364,130 @@
 - Expanded automated testing for product, order and stock operations.
 - Successfully passed all **28 automated tests**.
 - Updated project documentation and synchronised the latest changes with GitHub.
+---
+# 📅 Week 5 – Software Quality Improvement, Validation Testing and Code Refactoring
 
-**Overall Result:** The application became more reliable through improved validation, stock management, database error handling and automated testing. Work also continued on reviewing the remaining OOP and project requirements.
+## 👨‍💻 Haroon Afridi – Database Management and Application Development
+
+**✅ Work Completed**
+- Continued working on the Online Store Management System using Python, Streamlit and MySQL.
+- Added a new test file, `tests/test_validation.py`, to test the validation functions used in the application.
+- Added test cases for product information, product IDs, stock quantities, order details, order status, payment information and search keywords.
+- Used Ruff to check code quality and identify style and import-order issues.
+- Corrected the import-order issues identified by Ruff.
+- Refactored nested `with` statements in `tests/test_stock_operations.py` by combining the context managers into a single block.
+- Ran the complete test suite using `python -m pytest -v`, with all **108 tests passing**.
+
+
+
+**⚠️ Problems Faced**
+- Ruff identified import-order issues in several Python files.
+- Nested context managers in the stock operation tests needed improvement for readability.
+- Additional validation tests were required to check different types of valid and invalid inputs.
+- Needed to ensure that code-quality improvements did not change the existing test behaviour.
+
+**🎯 Next Steps**
+- Review the database connection configuration and prepare a separate test database for integration testing.
+- Continue reviewing database operations and error handling.
+- Support integration testing of the application modules.
+- Review remaining project requirements and continue updating the documentation.
 
 ---
 
-### 📈 Overall Project Progress
+## 👨‍💻 Pradeep Sapkota – Product Module and Backend
+
+**✅ Work Completed**
+- Continued reviewing the Product module and its connection with the MySQL database.
+- Reviewed the existing product management operations, including adding, searching, retrieving and deleting products.
+- Reviewed the existing automated tests and checked how invalid inputs are handled by the application.
+- Supported discussions about improving backend code quality and maintaining consistent validation across the application.
+- Reviewed the relationship between product management and stock management functionality.
+- Continued working within the Product module and backend development area.
+- Ran the final Ruff check, which reported **All checks passed!**
+
+**⚠️ Problems Faced**
+- Needed to maintain consistency between product validation and database operations.
+- Needed to ensure that product operations work correctly with stock management functionality.
+- Code-quality improvements required reviewing existing backend code without affecting its functionality.
+
+**🎯 Next Steps**
+- Continue improving product management and backend functionality.
+- Review product CRUD operations and input validation.
+- Support integration testing between product and stock management.
+- Review and correct any remaining backend issues.
+
+---
+
+## 👨‍💻 Poshan Oli – Order Module
+
+**✅ Work Completed**
+- Continued reviewing the Order module and its existing functionality.
+- Reviewed order creation and the connection between customers, products and order items.
+- Continued focusing on order processing and order status management.
+- Reviewed how stock availability affects order creation and processing.
+- Participated in discussions about improving the reliability of order operations and application workflows.
+
+**⚠️ Problems Faced**
+- Order processing depends on correct customer, product and stock information.
+- Maintaining consistency between order operations and related database records requires careful testing.
+- Order status and payment operations need to work correctly together.
+
+**🎯 Next Steps**
+- Continue improving order creation and order management.
+- Review order processing and stock-related operations.
+- Support testing of order status updates and payment workflows.
+- Check the integration of the Order module with the other application components.
+
+---
+
+## 👨‍💻 Lamyae Echaoui – Testing, Documentation and Collaboration
+
+**✅ Work Completed**
+- Continued reviewing the project documentation and existing project requirements.
+- Supported the organisation of project progress and development activities.
+- Reviewed the importance of automated testing and code quality as part of the Week 5 software quality activities.
+- Continued working within the testing and documentation responsibility area.
+- Supported coordination of project changes and GitHub updates.
+
+**⚠️ Problems Faced**
+- Keeping documentation aligned with the latest code changes requires regular updates.
+- The project needs consistent testing and review across different modules.
+- Team members need to coordinate their work to avoid conflicts when integrating changes.
+
+**🎯 Next Steps**
+- Continue updating the README and project documentation.
+- Review the latest application changes against the project requirements.
+- Support testing and debugging of the integrated application.
+- Coordinate GitHub updates and maintain records of team progress.
+
+---
+
+## 📌 Week 5 – Team Summary
+
+- Added a new validation test file, `tests/test_validation.py`.
+- Expanded automated testing for product, stock, order and validation functionality.
+- Used Ruff to identify and correct code-quality issues.
+- Improved import ordering across several Python files.
+- Refactored nested context managers in the stock operation tests.
+- Successfully completed the Ruff check with **All checks passed!**
+- Ran the complete pytest suite, with **108 tests passing**.
+- Reviewed Git changes and committed the improvements.
+- Continued reviewing the responsibilities of the Product, Order, Database, Testing and Documentation areas.
+- Discussed further improvements to software quality and testing.
+
+**Overall Result:** Week 5 focused on improving the reliability, readability and maintainability of the Online Store Management System. Validation test coverage was expanded, existing code-quality issues were corrected, and all 108 automated tests passed after the changes. The team also continued reviewing the individual application modules and planning further integration and testing activities.
+
+---
+
+## 📈 Overall Project Progress
 
 | Week | Main Activity | Status |
 |---|---|---|
 | Week 1 | Project planning and requirements | Completed |
 | Week 2 | Python and MySQL practice | Completed |
 | Week 3 | Database integration, application development and testing | Completed |
-| Week 4 | OOP requirement and application improvements | Completed / Ongoing |
-| Week 5 | Feature completion and integration | Upcoming |
+| Week 4 | OOP requirement and application improvements | Completed |
+| Week 5 | Validation testing and software quality improvement | Completed |
 | Week 6 | Further testing and error handling | Upcoming |
 | Week 7 | Documentation and improvements | Upcoming |
 | Week 8 | Final testing and presentation | Upcoming |
