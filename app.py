@@ -4,6 +4,7 @@ import streamlit as st
 
 from product_operations import (
     get_all_products,
+    get_categories,
     search_products,
     add_products,
     delete_products
@@ -23,7 +24,8 @@ PAYMENT_METHODS = ["Cash", "Card", "Online"]
 st.set_page_config(page_title="Online Store", layout="centered")
 
 if "cart" not in st.session_state:
-    st.session_state.cart = []          # list of (product_id, name, price, qty)
+    # list of (product_id, name, price, qty)
+    st.session_state.cart = []
 
 # ====================== SIDEBAR MENU ======================
 st.sidebar.title("🛒 Online Store")
@@ -45,9 +47,23 @@ def products_page():
     with tab1:
         st.subheader("All Products")
 
-        products = get_all_products()
+        products, error = get_all_products()
+        categories, _ = get_categories()
+        chosen = st.selectbox("Filter by category", [
+                              "All"] + categories, key="filter_category")
+        if chosen != "All":
+            products = [p for p in products if p[2] == chosen]
 
-        if products:
+        if error:
+            st.error(error)
+        elif products:
+            low_stock_products = []
+            for p in products:
+                if p[4] < 8:
+                    low_stock_products.append(p[1])
+            if low_stock_products:
+                st.warning("Low stock products: " +
+                           ",".join(low_stock_products))
             table_data = [{
                 "ID": p[0],
                 "Name": p[1],
@@ -58,7 +74,7 @@ def products_page():
 
             st.dataframe(table_data, width="stretch", hide_index=True)
         else:
-            st.warning("No products found or database connection failed.")
+            st.info("No product in the store yet")
 
     # ---------- Search products ----------
     with tab2:
@@ -71,18 +87,22 @@ def products_page():
             keyword = st.text_input("Enter product name")
             st.caption("Example: Wireless Mouse, Keyboard")
         else:
-            keyword = st.text_input("Enter category")
-            st.caption(
-                "Available categories: Electronics, Accessories, Home, "
-                "Stationery")
+            categories, error = get_categories()
+            if categories:
+                keyword = st.selectbox("Choose category", categories)
+            else:
+                keyword = ""
+                st.info("No categories available.")
 
         if st.button("Search"):
             if keyword.strip() == "":
                 st.warning("Please enter a keyword to search.")
             else:
-                results = search_products(keyword)
+                results, error = search_products(keyword)
 
-                if results:
+                if error:
+                    st.error(error)
+                elif results:
                     table_data = [{
                         "ID": p[0],
                         "Name": p[1],
@@ -98,40 +118,50 @@ def products_page():
     # ---------- Add product ----------
     with tab3:
         st.subheader("Add New Product")
+        categories, _ = get_categories()
+        NEW = "+ New category"
 
         with st.form("add_product_form", clear_on_submit=True):
             name = st.text_input("Product Name")
-            category = st.text_input("Category")
+            chosen = st.selectbox(
+                "Category", categories + [NEW], key="add_category")
+            new_category = st.text_input("New category name")
             price = st.number_input(
-                "Price (€)", min_value=10.0, step=0.01, format="%.2f")
+                "Price (€)", min_value=0.0, value=10.0, step=0.1, format="%.2f")
             stock = st.number_input("Stock Quantity", min_value=0, step=1)
 
             submitted = st.form_submit_button("Add Product")
 
             if submitted:
+                if chosen == NEW:
+                    category = new_category.strip()
+                    for c in categories:
+                        if c.lower() == category.lower():
+                            category = c
+                            break
+                else:
+                    category = chosen
                 if not name.strip() or not category.strip():
                     st.error("Product Name and Category are required.")
                 else:
-                    success = add_products(name, category, price, stock)
-                    if success == "Exists":
-                        st.warning(
-                            f"{name.strip()} already exists in the store")
-                    elif success:
-                        st.success("Product added successfully!")
+                    success, message = add_products(
+                        name, category, price, stock)
+                    if success:
+                        st.success(message)
                         time.sleep(1)
                         st.rerun()
                     else:
-                        st.error("Failed to add product."
-                                 "Product is already listed")
-
+                        st.error(message)
     # ---------- Delete product ----------
     with tab4:
         st.subheader("Delete Product")
         st.warning("This action cannot be undone.")
 
-        products = get_all_products()
+        products, error = get_all_products()
 
-        if products:
+        if error:
+            st.error(error)
+        elif products:
             product_options = {
                 f"ID {p[0]} - {p[1]} (Stock: {p[4]})": p[0]
                 for p in products
@@ -179,10 +209,12 @@ def orders_page():
             st.success(flash)
 
         customers = get_all_customers()
-        products = get_all_products()
+        products, error = get_all_products()
 
         if not customers:
             st.warning("No customers found or database connection failed.")
+        elif error:
+            st.error(error)
         elif not products:
             st.warning("No products found or database connection failed.")
         else:
